@@ -40,6 +40,7 @@ export interface Database {
                 Row: {
                     id: string
                     company_id: string | null
+                    email: string | null
                     role: 'admin' | 'employee' | 'viewer' | 'manager' | 'manager'
                     full_name: string | null
                     job_title: string | null
@@ -52,6 +53,7 @@ export interface Database {
                 Insert: {
                     id: string
                     company_id?: string | null
+                    email?: string | null
                     role?: 'admin' | 'employee' | 'viewer' | 'manager'
                     full_name?: string | null
                     job_title?: string | null
@@ -64,6 +66,7 @@ export interface Database {
                 Update: {
                     id?: string
                     company_id?: string | null
+                    email?: string | null
                     role?: 'admin' | 'employee' | 'viewer' | 'manager'
                     full_name?: string | null
                     job_title?: string | null

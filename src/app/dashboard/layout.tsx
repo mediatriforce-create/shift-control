@@ -122,12 +122,11 @@ export default function DashboardLayout({
                 <nav className="space-y-2 flex-1">
                     {/* Common */}
                     <NavItem href="/dashboard" icon={<LayoutDashboard />} label="Início" active={pathname === '/dashboard'} />
-                    <NavItem href="/dashboard/profile" icon={<User />} label="Meu Perfil" active={pathname.startsWith('/dashboard/profile')} />
+                    {/* Link de Perfil removido da sidebar para reduzir poluição visual */}
 
                     {/* Admin Only */}
                     {isAdmin && (
                         <>
-                            <NavItem href="/dashboard/companies" icon={<Building2 />} label="Trocar Empresa" active={pathname === '/dashboard/companies'} />
                             <NavItem href="/dashboard/employees" icon={<Users />} label="Funcionários" active={pathname.startsWith('/dashboard/employees')} />
                             <NavItem href="/dashboard/shifts" icon={<Calendar />} label="Turnos" active={pathname.startsWith('/dashboard/shifts')} />
                             <NavItem href="/dashboard/audit" icon={<ClipboardList />} label="Auditoria" active={pathname.startsWith('/dashboard/audit')} />
@@ -143,13 +142,20 @@ export default function DashboardLayout({
                     )}
                 </nav>
 
-                <button
-                    onClick={handleLogout}
-                    className="flex items-center gap-3 text-zinc-400 hover:text-white transition-colors p-3 rounded-xl hover:bg-white/5 w-full text-left"
-                >
-                    <LogOut className="w-5 h-5" />
-                    <span>Sair</span>
-                </button>
+                <div className="space-y-2 pt-4 border-t border-white/10">
+                    {/* Admin: Trocar Empresa no rodapé */}
+                    {isAdmin && (
+                        <NavItem href="/dashboard/companies" icon={<Building2 />} label="Trocar Empresa" active={pathname === '/dashboard/companies'} />
+                    )}
+
+                    <button
+                        onClick={handleLogout}
+                        className="flex items-center gap-3 text-red-400 hover:text-red-300 transition-colors p-3 rounded-xl hover:bg-white/5 w-full text-left"
+                    >
+                        <LogOut className="w-5 h-5" />
+                        <span>Sair</span>
+                    </button>
+                </div>
             </aside>
 
             {/* Main Content */}

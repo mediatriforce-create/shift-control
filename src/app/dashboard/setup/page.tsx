@@ -122,12 +122,121 @@ export default function SetupPage() {
         }
     }
 
+    const [userType, setUserType] = useState<'owner' | 'employee' | null>(null)
+    const [userEmail, setUserEmail] = useState('')
+
+    // Fetch user email on mount
+    useState(() => {
+        supabase.auth.getUser().then(({ data }) => {
+            if (data.user?.email) setUserEmail(data.user.email)
+        })
+    })
+
+    // ... existing handlers ...
+
+    // Back to Selection
+    const handleBack = () => {
+        setUserType(null)
+        setStep(1)
+    }
+
+    if (!userType) {
+        return (
+            <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+                <div className="w-full max-w-2xl space-y-8 animate-in fade-in zoom-in duration-500">
+                    <div className="text-center">
+                        <h1 className="text-3xl font-bold text-white mb-2">Bem-vindo ao ShiftControl</h1>
+                        <p className="text-zinc-400">Como você deseja usar a plataforma?</p>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                        {/* Option 1: Owner */}
+                        <button
+                            onClick={() => setUserType('owner')}
+                            className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-blue-500/50 hover:bg-zinc-800/50 transition-all group text-left space-y-4"
+                        >
+                            <div className="w-12 h-12 bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:bg-blue-500/20 transition-colors">
+                                <Building2 className="w-6 h-6 text-blue-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-semibold text-white">Sou Gestor/Dono</h3>
+                                <p className="text-zinc-400 text-sm mt-1">Quero criar uma empresa e gerenciar minha equipe.</p>
+                            </div>
+                        </button>
+
+                        {/* Option 2: Employee */}
+                        <button
+                            onClick={() => setUserType('employee')}
+                            className="bg-zinc-900 border border-zinc-800 p-8 rounded-2xl hover:border-purple-500/50 hover:bg-zinc-800/50 transition-all group text-left space-y-4"
+                        >
+                            <div className="w-12 h-12 bg-purple-500/10 rounded-xl flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
+                                <Users className="w-6 h-6 text-purple-400" />
+                            </div>
+                            <div>
+                                <h3 className="text-xl font-semibold text-white">Sou Funcionário</h3>
+                                <p className="text-zinc-400 text-sm mt-1">Fui contratado e estou aguardando meu acesso.</p>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    if (userType === 'employee') {
+        return (
+            <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+                <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 p-8 rounded-2xl text-center space-y-6 animate-in fade-in zoom-in">
+                    <div className="mx-auto w-16 h-16 bg-purple-500/10 rounded-full flex items-center justify-center mb-4">
+                        <Users className="w-8 h-8 text-purple-400" />
+                    </div>
+
+                    <h2 className="text-2xl font-bold text-white">Aguardando Convite</h2>
+
+                    <div className="text-zinc-400 space-y-4">
+                        <p>
+                            Para acessar sua conta, você precisa ser convidado pelo administrador da sua empresa.
+                        </p>
+                        <p className="text-sm bg-black/30 p-3 rounded-lg border border-zinc-800 break-all">
+                            Seu email: <span className="text-white font-mono">{userEmail}</span>
+                        </p>
+                        <p className="text-sm">
+                            Peça para seu gestor enviar um convite para este email. Assim que ele fizer isso, atualize esta página.
+                        </p>
+                    </div>
+
+                    <div className="space-y-3 pt-4">
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="w-full bg-purple-600 hover:bg-purple-500 text-white font-semibold py-3 rounded-xl transition-all"
+                        >
+                            Já fui convidado (Atualizar)
+                        </button>
+                        <button
+                            onClick={handleBack}
+                            className="w-full text-zinc-500 hover:text-white text-sm transition-colors"
+                        >
+                            Voltar / Sou Gestor
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    // Owner Flow (Existing Create Company)
     return (
         <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
             <div className="w-full max-w-2xl space-y-8">
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold text-white mb-2">Configuração Inicial</h1>
-                    <p className="text-zinc-400">Vamos preparar o ambiente para sua equipe.</p>
+                    <button
+                        onClick={handleBack}
+                        className="text-zinc-500 hover:text-white text-sm mb-4 flex items-center gap-2 mx-auto"
+                    >
+                        ← Voltar
+                    </button>
+                    <h1 className="text-3xl font-bold text-white mb-2">Criar Nova Empresa</h1>
+                    <p className="text-zinc-400">Vamos preparar o ambiente administrativo.</p>
                 </div>
 
                 <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 shadow-xl">
