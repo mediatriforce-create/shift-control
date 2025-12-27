@@ -27,50 +27,51 @@ export default function DashboardLayout({
                     return
                 }
 
+                // 1. Fetch Fresh Profile
                 const { data: profile } = await supabase
                     .from('profiles')
                     .select('company_id, role')
                     .eq('id', user.id)
                     .single()
 
-                if (!profile?.company_id) {
-                    // Se não tem empresa selecionada/vinculada
-                    // Fix: Check if profile exists before accessing role
+                // 2. State Management
+                setUserRole(profile?.role || null)
+                const hasCompany = !!profile?.company_id
+                const isSetupPage = pathname === '/dashboard/setup'
+                const isCompaniesPage = pathname === '/dashboard/companies'
+
+                // 3. Redirection Logic (Hierarchy)
+
+                // A. No Company? -> Go to Setup or Companies (Admins)
+                if (!hasCompany) {
                     if (profile?.role === 'admin' || profile?.role === 'manager') {
-                        // Admin: Manda para seleção de empresas (se não estiver lá nem no setup)
-                        if (pathname !== '/dashboard/companies' && pathname !== '/dashboard/setup') {
+                        // Admin without company -> Force Companies/Setup
+                        if (!isCompaniesPage && !isSetupPage) {
                             router.push('/dashboard/companies')
                         }
                     } else {
-                        // Funcionário e outros casos (ou profile null)
-                        if (pathname !== '/dashboard/setup') {
-                            router.push('/login')
+                        // User without company -> MUST go to Setup (Waiting Screen or Create)
+                        if (!isSetupPage) {
+                            router.push('/dashboard/setup')
                         }
                     }
-                } else {
-                    // Tem empresa selecionada
-                    setUserRole(profile.role)
-
-                    // Se tentar acessar Setup ou Companies com empresa já selecionada,
-                    // podemos deixar (para criar outra) ou redirecionar.
-                    // O usuário quer "caiu lá, escolheu".
-                    // Vamos deixar ele acessar 'companies' para poder TROCAR.
-
-                    if (pathname === '/dashboard/setup') {
-                        // Se já tem empresa, setup cria UMA NOVA.
-                        // Não redireciona. Deixa criar.
-                    }
+                    return // Stop further checks
                 }
 
-                // Force "Landing" on Companies Page for Admins (Optional but requested "Toda vez...")
-                // Se acabou de logar (chegou no /dashboard raiz) e é admin -> Manda escolher empresa
-                if ((profile?.role === 'admin' || profile?.role === 'manager') && pathname === '/dashboard') {
-                    // router.push('/dashboard/companies') // Comentado para não criar loop se já tiver company_id
-                    // Mas se ele quer "Qual empresa quer mexer hoje?", o ideal é SEMPRE cair lá.
-                    // Vamos manter simples por enquanto: Se não tem ID, vai pra lá. 
-                    // Se tem ID, vai pro dashboard daquela empresa.
-                    // O usuário pode clicar em "Trocar Empresa" (vamos adicionar no sidebar).
+                // B. Has Company? -> Allow Normal Flow
+                // If on Setup/Companies but ALREADY HAS COMPANY, we might want to redirect to Dashboard
+                // unless they explicitly want to change company (Companies Page).
+                // But Setup Page is useless if they have a company (Auto-Join worked).
+                if (hasCompany && isSetupPage && profile?.role === 'employee') {
+                    // Employee stuck on Setup? Kick to Dashboard.
+                    router.push('/dashboard')
                 }
+
+                // C. Dashboard Root Logic
+                // If Admin lands on Root, maybe show Companies? (User requested "always go to companies")
+                // But let's be careful. If they just logged in, fine.
+                // For now, let's just allow them to see the dashboard if they are linked.
+
             } catch (error) {
                 console.error('Check user error:', error)
             } finally {
