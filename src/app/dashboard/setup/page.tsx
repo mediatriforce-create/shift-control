@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Building2, Users, Loader2, Check, Plus, Trash2 } from 'lucide-react'
@@ -126,11 +126,28 @@ export default function SetupPage() {
     const [userEmail, setUserEmail] = useState('')
 
     // Fetch user email on mount
-    useState(() => {
-        supabase.auth.getUser().then(({ data }) => {
-            if (data.user?.email) setUserEmail(data.user.email)
-        })
-    })
+    // Check for Auto-Join (Redirect if already linked)
+    useEffect(() => {
+        const checkAutoJoin = async () => {
+            const { data: { user } } = await supabase.auth.getUser()
+            if (user) {
+                if (user.email) setUserEmail(user.email)
+
+                // Check profile
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('role, company_id')
+                    .eq('id', user.id)
+                    .single()
+
+                if (profile?.company_id && profile?.role) {
+                    // AUTO-JOIN SUCCESS: Redirect immediately
+                    router.push('/dashboard')
+                }
+            }
+        }
+        checkAutoJoin()
+    }, [])
 
     // ... existing handlers ...
 
