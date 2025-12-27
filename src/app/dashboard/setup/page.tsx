@@ -41,7 +41,10 @@ export default function SetupPage() {
             // 2. Link Profile to Company
             const { error: profileError } = await supabase
                 .from('profiles')
-                .update({ company_id: company.id })
+                .update({
+                    company_id: company.id,
+                    role: 'owner' // Garante que o usuário vira dono no perfil também
+                })
                 .eq('id', (await supabase.auth.getUser()).data.user?.id)
 
             if (profileError) throw profileError

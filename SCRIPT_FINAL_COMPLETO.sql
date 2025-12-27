@@ -196,21 +196,48 @@ CREATE TRIGGER on_auth_user_created
     FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ==============================================================================
--- 4. POLÍTICAS DE SEGURANÇA BLINDADAS (RLS)
+-- 4. POLÍTICAS DE SEGURANÇA BLINDADAS (RLS) - SEM RECURSÃO INFINITA
 -- ==============================================================================
+
+-- 4.0 HELPER FUNCTIONS (Bypass RLS para evitar loops)
+-- Estas funções rodam com permissão de SECURITY DEFINER (sudo) para ler dados sem triggerar policies.
+
+-- Helper: Pegar ID da Empresa do Usuário
+CREATE OR REPLACE FUNCTION public.get_my_company_id()
+RETURNS UUID
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+    SELECT company_id FROM public.profiles WHERE id = auth.uid() LIMIT 1;
+$$;
+
+-- Helper: Verificar se sou Owner/Admin/Manager
+CREATE OR REPLACE FUNCTION public.is_admin_or_owner()
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+    SELECT EXISTS (
+        SELECT 1 FROM public.profiles 
+        WHERE id = auth.uid() 
+        AND role IN ('owner', 'admin', 'manager')
+    );
+$$;
 
 -- 4.1 EMPRESAS (Companies)
 ALTER TABLE public.companies ENABLE ROW LEVEL SECURITY;
 
--- Select: Dono OU Funcionário VINCULADO
+-- Select: Dono OU Funcionário daquela empresa
 CREATE POLICY "Strict company view" ON public.companies
 FOR SELECT USING (
     owner_id = auth.uid() 
     OR 
-    id = (SELECT company_id FROM public.profiles WHERE id = auth.uid())
+    id = public.get_my_company_id()
 );
 
--- Insert: CORREÇÃO: Qualquer um autenticado pode criar, desde que ele seja o owner
+-- Insert: Qualquer um autenticado pode criar (desde que seja owner)
 CREATE POLICY "Enable insert for authenticated users" ON public.companies
 FOR INSERT WITH CHECK (
     auth.uid() = owner_id
@@ -223,16 +250,12 @@ FOR UPDATE USING (auth.uid() = owner_id);
 -- 4.2 PERFIS (Profiles)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Select: Eu mesmo OU Colegas da mesma empresa (Isolamento de Tenant)
+-- Select: Eu mesmo OU Colegas da mesma empresa
 CREATE POLICY "View profiles in same company" ON public.profiles
 FOR SELECT USING (
     (auth.uid() = id) 
     OR
-    (
-        company_id IS NOT NULL 
-        AND 
-        company_id = (SELECT company_id FROM public.profiles WHERE id = auth.uid())
-    )
+    (company_id IS NOT NULL AND company_id = public.get_my_company_id())
 );
 
 -- Update: Eu mesmo (dados básicos) OU Admin da minha empresa
@@ -241,24 +264,31 @@ FOR UPDATE USING (
     (auth.uid() = id)
     OR
     (
-        (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
+        public.is_admin_or_owner() = true
         AND
-        company_id = (SELECT company_id FROM public.profiles WHERE id = auth.uid())
+        company_id = public.get_my_company_id()
     )
 );
-
--- Permite Insert Próprio (Opcional, caso a trigger falhe e o app tente criar, mas a trigger cobre isso)
--- CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
 
 -- 4.3 CONVITES (Invites)
 ALTER TABLE public.company_invites ENABLE ROW LEVEL SECURITY;
 
--- Apenas Admins/Managers podem ver e criar convites para a própria empresa
+-- Apenas Admins/Managers (pelo perfil) OU Dono da Empresa (direto na tabela companies)
 CREATE POLICY "Admins manage invites" ON public.company_invites
 FOR ALL USING (
-    company_id = (SELECT company_id FROM public.profiles WHERE id = auth.uid())
-    AND
-    (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
+    (
+        company_id = public.get_my_company_id()
+        AND
+        public.is_admin_or_owner() = true
+    )
+    OR
+    (
+        EXISTS (
+            SELECT 1 FROM public.companies 
+            WHERE id = company_invites.company_id 
+            AND owner_id = auth.uid()
+        )
+    )
 );
 
 -- 5. AJUSTES FINAIS DE TIPO
