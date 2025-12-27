@@ -7,9 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 import { Lock, Mail, Loader2, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
-    // Modes: 'selection', 'admin_login', 'employee_login'
-    const [viewMode, setViewMode] = useState<'selection' | 'admin' | 'employee'>('selection')
-
     // Auth State
     const [isSignUp, setIsSignUp] = useState(false)
     const [email, setEmail] = useState('')
@@ -28,31 +25,25 @@ export default function LoginPage() {
         setSuccessMessage(null)
 
         try {
-            if (viewMode === 'employee' && isSignUp) {
-                // Employee Signup logic (Trigger handles linking)
+            if (isSignUp) {
+                // Unified Signup
                 const { error } = await supabase.auth.signUp({
                     email,
                     password,
-                    options: { emailRedirectTo: `${location.origin}/auth/callback` },
+                    options: {
+                        emailRedirectTo: `${location.origin}/auth/callback`,
+                    },
                 })
                 if (error) throw error
-                setSuccessMessage('Conta criada! Se seu email foi convidado, você já está na empresa.')
-            } else if (viewMode === 'admin' && isSignUp) {
-                // Admin Signup
-                const { error } = await supabase.auth.signUp({
-                    email,
-                    password,
-                    options: { emailRedirectTo: `${location.origin}/auth/callback` },
-                })
-                if (error) throw error
-                setSuccessMessage('Conta de Admin criada! Verifique seu email.')
+                setSuccessMessage('Conta criada! Verifique seu email para confirmar.')
             } else {
-                // Login (Unified for now, RLS handles access)
+                // Login
                 const { error } = await supabase.auth.signInWithPassword({
                     email,
                     password,
                 })
                 if (error) throw error
+
                 router.push('/dashboard')
                 router.refresh()
             }
@@ -63,58 +54,6 @@ export default function LoginPage() {
         }
     }
 
-    // Selection View
-    if (viewMode === 'selection') {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white p-4 relative overflow-hidden">
-                {/* Background Gradients */}
-                <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full" />
-                <div className="absolute bottom-[-20%] right-[-20%] w-[50%] h-[50%] bg-purple-600/20 blur-[120px] rounded-full" />
-
-                <div className="w-full max-w-4xl space-y-12 relative z-10">
-                    <div className="text-center space-y-4">
-                        <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-gradient-to-tr from-blue-500 to-purple-500 mb-6 shadow-2xl shadow-blue-500/20">
-                            <Lock className="w-10 h-10 text-white" />
-                        </div>
-                        <h1 className="text-5xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-b from-white to-white/60">
-                            ShiftControl
-                        </h1>
-                        <p className="text-xl text-zinc-400">Como você deseja acessar?</p>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-6 max-w-2xl mx-auto">
-                        <button
-                            onClick={() => { setViewMode('admin'); setIsSignUp(false); setError(null); setSuccessMessage(null); }}
-                            className="group relative p-8 bg-zinc-900/50 backdrop-blur-xl rounded-3xl border border-white/10 hover:border-blue-500/50 transition-all hover:bg-zinc-900/80 text-left space-y-4 hover:-translate-y-1 hover:shadow-2xl hover:shadow-blue-500/10"
-                        >
-                            <div className="w-12 h-12 rounded-2xl bg-blue-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Lock className="w-6 h-6 text-blue-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-white mb-1">Administrador</h3>
-                                <p className="text-zinc-400 text-sm">Criar empresa, gerenciar equipe e turnos.</p>
-                            </div>
-                        </button>
-
-                        <button
-                            onClick={() => { setViewMode('employee'); setIsSignUp(false); setError(null); setSuccessMessage(null); }}
-                            className="group relative p-8 bg-zinc-900/50 backdrop-blur-xl rounded-3xl border border-white/10 hover:border-purple-500/50 transition-all hover:bg-zinc-900/80 text-left space-y-4 hover:-translate-y-1 hover:shadow-2xl hover:shadow-purple-500/10"
-                        >
-                            <div className="w-12 h-12 rounded-2xl bg-purple-500/20 flex items-center justify-center group-hover:scale-110 transition-transform">
-                                <Mail className="w-6 h-6 text-purple-400" />
-                            </div>
-                            <div>
-                                <h3 className="text-xl font-bold text-white mb-1">Funcionário</h3>
-                                <p className="text-zinc-400 text-sm">Ver minha escala e bater ponto.</p>
-                            </div>
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )
-    }
-
-    // Login/Auth View (Shared Structure, customized text)
     return (
         <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-white p-4 relative overflow-hidden">
             <div className="absolute top-[-20%] left-[-20%] w-[50%] h-[50%] bg-blue-600/20 blur-[120px] rounded-full" />
@@ -122,19 +61,14 @@ export default function LoginPage() {
 
             <div className="w-full max-w-md space-y-8 relative z-10">
                 <div className="text-center space-y-4">
-                    <button onClick={() => { setViewMode('selection'); setError(null); setSuccessMessage(null); }} className="absolute left-0 top-0 text-zinc-500 hover:text-white transition-colors flex items-center gap-2 text-sm font-medium">
-                        ← Voltar
-                    </button>
                     <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-purple-500 mb-6 shadow-xl shadow-blue-500/20">
-                        {viewMode === 'admin' ? <Lock className="w-8 h-8 text-white" /> : <Mail className="w-8 h-8 text-white" />}
+                        <Lock className="w-8 h-8 text-white" />
                     </div>
                     <h1 className="text-3xl font-bold tracking-tight text-white">
-                        {viewMode === 'admin' ? 'Área do Gestor' : 'Área do Funcionário'}
+                        ShiftControl
                     </h1>
                     <p className="text-zinc-400">
-                        {isSignUp
-                            ? (viewMode === 'admin' ? 'Crie sua conta para configurar a empresa' : 'Crie sua senha de acesso')
-                            : 'Entre com suas credenciais'}
+                        {isSignUp ? 'Crie sua conta para começar' : 'Entre com suas credenciais'}
                     </p>
                 </div>
 
@@ -212,7 +146,7 @@ export default function LoginPage() {
                             }}
                             className="text-sm text-zinc-400 hover:text-white transition-colors underline"
                         >
-                            {isSignUp ? 'Já tem conta? Faça login' : (viewMode === 'admin' ? 'Não tem empresa? Crie agora' : 'Primeiro acesso? Cadastre a senha')}
+                            {isSignUp ? 'Já tem conta? Faça login' : 'Não tem conta? Crie agora'}
                         </button>
                     </div>
                 </form>

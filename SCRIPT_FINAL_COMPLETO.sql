@@ -1,6 +1,6 @@
 -- ==============================================================================
--- SCRIPT UNIVERSAL "TURBO" - ShiftControl V3
--- Objetivo: Sistema Blindado de Auto-Join com Auditoria e Tratamento de Dados
+-- SCRIPT UNIVERSAL "TURBO" - ShiftControl V3 (COMPLETO E SEM CORTES)
+-- Objetivo: Sistema Blindado de Auto-Join com Auditoria, RLS e Limpeza
 -- ==============================================================================
 
 -- 1. LIMPEZA SEGURA (Clean Slate Clean)
@@ -8,17 +8,31 @@
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 DROP FUNCTION IF EXISTS public.handle_new_user();
 
--- Limpa policies que podem estar conflitando
+-- Limpa policies que podem estar conflitando (Removemos TODAS para recriar do zero)
 DROP POLICY IF EXISTS "Strict company view" ON public.companies;
 DROP POLICY IF EXISTS "Strict company access" ON public.companies;
 DROP POLICY IF EXISTS "Owners can update own company" ON public.companies;
+DROP POLICY IF EXISTS "Enable insert for authenticated users" ON public.companies;
 DROP POLICY IF EXISTS "View profiles in same company" ON public.profiles;
 DROP POLICY IF EXISTS "Update own profile or Admin manage" ON public.profiles;
+DROP POLICY IF EXISTS "Admin manage company profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Admins manage invites" ON public.company_invites;
 
 -- ==============================================================================
--- 2. TABELA DE AUDITORIA DE SISTEMA (Novo!)
+-- 1.1 LIMPEZA DE DADOS (OPCIONAL - CUIDADO)
+-- Descomente as linhas abaixo se quiser ZERAR o banco de dados para iniciar testes limpos
+-- TRUNCATE TABLE public.time_entries CASCADE;
+-- TRUNCATE TABLE public.shifts CASCADE;
+-- TRUNCATE TABLE public.profiles CASCADE;
+-- TRUNCATE TABLE public.companies CASCADE;
+-- TRUNCATE TABLE public.company_invites CASCADE;
+-- TRUNCATE TABLE public.system_logs CASCADE;
+
 -- ==============================================================================
--- Vamos registrar tudo o que acontece no sistema de convites para debug futuro.
+-- 2. TABELAS NECESSÁRIAS
+-- ==============================================================================
+
+-- 2.1 Tabela de Auditoria de Sistema (Novo!)
 CREATE TABLE IF NOT EXISTS public.system_logs (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     event_type TEXT NOT NULL, -- 'AUTO_JOIN', 'SIGNUP_NEW_OWNER', 'ERROR'
@@ -27,9 +41,18 @@ CREATE TABLE IF NOT EXISTS public.system_logs (
     details JSONB,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
 );
-
--- Permite que o sistema (Trigger) escreva aqui, mas ninguem leia via API (seguranca)
 ALTER TABLE public.system_logs ENABLE ROW LEVEL SECURITY;
+
+-- 2.2 Tabela de Convites (Garantir Existência)
+CREATE TABLE IF NOT EXISTS public.company_invites (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    company_id UUID NOT NULL REFERENCES public.companies(id) ON DELETE CASCADE,
+    email TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'employee',
+    status TEXT DEFAULT 'pending', -- pending, accepted
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_company_invites_email ON public.company_invites(email);
 
 -- ==============================================================================
 -- 3. FUNÇÃO AVANÇADA DE CRIAÇÃO DE USUÁRIO
@@ -102,8 +125,7 @@ BEGIN
 
         -- Atualiza Convite para 'accepted'
         UPDATE public.company_invites 
-        SET status = 'accepted', 
-            updated_at = now() -- Assumindo que pode ter essa coluna, senao ignora
+        SET status = 'accepted'
         WHERE id = v_invite_record.id;
 
         -- Log de Auditoria
@@ -115,7 +137,7 @@ BEGIN
         ));
 
     ELSE
-        -- [RAMO B]: NOVO DONO (Sem convite)
+        -- [RAMO B]: NOVO USUÁRIO / POTENCIAL DONO (Sem convite)
         v_company_id := NULL;
         v_target_role := NULL; -- Será definido quando criar a empresa
         v_signup_status := 'pending';
@@ -188,9 +210,11 @@ FOR SELECT USING (
     id = (SELECT company_id FROM public.profiles WHERE id = auth.uid())
 );
 
--- Insert: Qualquer um autenticado pode criar 1 empresa
+-- Insert: CORREÇÃO: Qualquer um autenticado pode criar, desde que ele seja o owner
 CREATE POLICY "Enable insert for authenticated users" ON public.companies
-FOR INSERT WITH CHECK (auth.uid() = owner_id);
+FOR INSERT WITH CHECK (
+    auth.uid() = owner_id
+);
 
 -- Update: APENAS o Dono original
 CREATE POLICY "Owners can update own company" ON public.companies
@@ -223,6 +247,9 @@ FOR UPDATE USING (
     )
 );
 
+-- Permite Insert Próprio (Opcional, caso a trigger falhe e o app tente criar, mas a trigger cobre isso)
+-- CREATE POLICY "Users can insert their own profile" ON public.profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
 -- 4.3 CONVITES (Invites)
 ALTER TABLE public.company_invites ENABLE ROW LEVEL SECURITY;
 
@@ -234,3 +261,24 @@ FOR ALL USING (
     (SELECT role FROM public.profiles WHERE id = auth.uid()) IN ('admin', 'manager')
 );
 
+-- 5. AJUSTES FINAIS DE TIPO
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
+       ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'manager';
+    END IF;
+END$$;
+
+-- 6. GARANTIA DE DELETE CASCADE (Para não travar deleção de users)
+-- Recria as FKs principais com ON DELETE CASCADE
+ALTER TABLE public.profiles
+DROP CONSTRAINT IF EXISTS profiles_id_fkey,
+ADD CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+ALTER TABLE public.companies
+DROP CONSTRAINT IF EXISTS companies_owner_id_fkey,
+ADD CONSTRAINT companies_owner_id_fkey FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+ALTER TABLE public.company_invites
+DROP CONSTRAINT IF EXISTS company_invites_company_id_fkey,
+ADD CONSTRAINT company_invites_company_id_fkey FOREIGN KEY (company_id) REFERENCES public.companies(id) ON DELETE CASCADE;
