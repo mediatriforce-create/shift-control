@@ -17,6 +17,7 @@ export default function DashboardLayout({
     const supabase = createClient()
     const [isLoading, setIsLoading] = useState(true)
     const [userRole, setUserRole] = useState<string | null>(null)
+    const [companyId, setCompanyId] = useState<string | null>(null)
 
     useEffect(() => {
         const checkUser = async () => {
@@ -36,6 +37,7 @@ export default function DashboardLayout({
 
                 // 2. State Management
                 setUserRole(profile?.role || null)
+                setCompanyId(profile?.company_id || null)
                 const hasCompany = !!profile?.company_id
                 const isSetupPage = pathname === '/dashboard/setup'
                 const isCompaniesPage = pathname === '/dashboard/companies'
@@ -66,11 +68,6 @@ export default function DashboardLayout({
                     // Employee stuck on Setup? Kick to Dashboard.
                     router.push('/dashboard')
                 }
-
-                // C. Dashboard Root Logic
-                // If Admin lands on Root, maybe show Companies? (User requested "always go to companies")
-                // But let's be careful. If they just logged in, fine.
-                // For now, let's just allow them to see the dashboard if they are linked.
 
             } catch (error) {
                 console.error('Check user error:', error)
@@ -105,7 +102,24 @@ export default function DashboardLayout({
         )
     }
 
-    const isAdmin = userRole === 'admin' || userRole === 'manager'
+    // BLOCKER: Se não tem empresa, NÃO RENDERIZA NADA (exceto se já estiver na página de setup/companies)
+    // Isso força o redirecionamento acontecer visualmente sem "piscar" o dashboard errado.
+    const mustSetup = !userRole && pathname !== '/dashboard/setup'
+
+    // Se for admin mas não tem empresa, force setup/companies
+    const isAdminUser = userRole === 'admin' || userRole === 'manager' || userRole === 'owner'
+    const isAdminOnWrongPage = isAdminUser && !companyId && pathname !== '/dashboard/companies' && pathname !== '/dashboard/setup'
+
+    if ((mustSetup || isAdminOnWrongPage) && !isLoading) {
+        return (
+            <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white flex-col gap-4">
+                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                <p className="text-zinc-500 animate-pulse">Redirecionando para configuração...</p>
+            </div>
+        )
+    }
+
+    const isAdmin = isAdminUser // Reuse logic
 
     return (
         <div className="min-h-screen bg-zinc-950 flex text-white font-sans">
@@ -116,16 +130,15 @@ export default function DashboardLayout({
                         ShiftControl
                     </h1>
                     <p className="text-xs text-zinc-500 mt-1 uppercase tracking-wider">
-                        {isAdmin ? 'Área do Gestor' : 'Funcionário'}
+                        {isAdmin ? 'Área do Gestor' : (userRole === 'employee' ? 'Funcionário' : 'Bem-vindo')}
                     </p>
                 </div>
 
                 <nav className="space-y-2 flex-1">
                     {/* Common */}
                     <NavItem href="/dashboard" icon={<LayoutDashboard />} label="Início" active={pathname === '/dashboard'} />
-                    {/* Link de Perfil removido da sidebar para reduzir poluição visual */}
 
-                    {/* Admin Only */}
+                    {/* Admin/Owner Only */}
                     {isAdmin && (
                         <>
                             <NavItem href="/dashboard/employees" icon={<Users />} label="Funcionários" active={pathname.startsWith('/dashboard/employees')} />
@@ -135,7 +148,7 @@ export default function DashboardLayout({
                     )}
 
                     {/* Employee Only */}
-                    {!isAdmin && (
+                    {userRole === 'employee' && (
                         <>
                             <NavItem href="/dashboard/my-schedule" icon={<CalendarRange />} label="Minha Escala" active={pathname.startsWith('/dashboard/my-schedule')} />
                             <NavItem href="/dashboard/ponto" icon={<Clock />} label="Bater Ponto" active={pathname.startsWith('/dashboard/ponto')} />
